@@ -48,8 +48,8 @@ docker restart "$CONTAINER"
 # ---- 4. 健康检查（自动探测端口映射） ----
 say "[4/4] 等待就绪并验证 ..."
 sleep 30
-# 从容器端口映射里取宿主机端口（默认 4000）
-PORT=$(docker port "$CONTAINER" 2>/dev/null | awk -F'[:/]' '/4000\/tcp/{print $NF; exit}')
+# 从容器端口映射里取宿主机端口：优先取容器内 4000/tcp 的映射，取不到再看 0.0.0.0 绑定，最后才回退 4000
+PORT=$(docker port "$CONTAINER" 2>/dev/null | awk '/^4000\/tcp|: 4000\/tcp|^0\.0\.0\.0:4000/{print; exit}' | awk -F'[:/[:space:]]+' '{for(i=NF;i>0;i--) if($i ~ /^[0-9]+$/ && $i != 4000){print $i; exit}}')
 [ -n "$PORT" ] || PORT=4000
 HEALTH_URL="http://127.0.0.1:${PORT}/health/liveliness"
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 "$HEALTH_URL" || echo "000")

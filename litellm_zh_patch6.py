@@ -4,21 +4,47 @@ import os, re, shutil
 
 # 动态发现 LiteLLM UI 目录（兼容不同 Python 版本的镜像）
 def _find_ui_dir():
-    import os as _os, glob as _glob
-    # 1) 通过已安装的 litellm 包定位
+    """按优先级定位 UI 静态资源目录；找不到时抛错退出（宁可失败也不改错目录）"""
+    import os as _os, glob as _glob, importlib.util as _ilu
+
+    def _looks_like_ui(p):
+        # UI 目录应包含 .next 或 html/js 静态资源
+        if not _os.path.isdir(p):
+            return False
+        try:
+            names = _os.listdir(p)
+        except Exception:
+            return False
+        if "_next" in names:
+            return True
+        return any(n.endswith((".js", ".html")) for n in names)
+
+    # 1) 通过已安装的 litellm 包定位（find_spec 支持命名空间包）
     try:
-        import litellm
-        p = _os.path.join(_os.path.dirname(_os.path.abspath(litellm.__file__ or ".")), "proxy", "_experimental", "out")
-        if _os.path.isdir(p):
-            return p
+        spec = _ilu.find_spec("litellm")
+        if spec is not None:
+            for base in (spec.submodule_search_locations or []):
+                p = _os.path.join(base, "proxy", "_experimental", "out")
+                if _looks_like_ui(p):
+                    return p
     except Exception:
         pass
-    # 2) 兜底：glob 匹配任意 python 版本路径
-    for p in _glob.glob("/app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out"):
-        if _os.path.isdir(p):
-            return p
-    # 3) 最后兜底：旧版硬编码路径
-    return "/app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out"
+
+    # 2) 兜底：glob 匹配任意 python 版本路径（仅取唯一候选，多个候选则要求恰好一个像 UI）
+    cands = [p for p in _glob.glob("/app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out") if _looks_like_ui(p)]
+    if len(cands) == 1:
+        return cands[0]
+
+    # 3) 历史硬编码路径（老镜像兼容），仍需校验
+    legacy = "/app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out"
+    if _looks_like_ui(legacy):
+        return legacy
+
+    raise SystemExit(
+        "[litellm_zh_patch] 未找到 LiteLLM UI 目录（litellm 包未安装且 /app/.venv 下无候选）。"
+        "若你的部署路径不同，请修改脚本顶部的 _find_ui_dir()。"
+    )
+
 UI = _find_ui_dir()
 
 DICT6 = {
@@ -152,13 +178,13 @@ DICT6 = {
 }
 
 ATTR_PATTERNS = [
-    re.compile(r'(children:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(label:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(title:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(placeholder:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(description:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(message:)"((?:[^"\\]|\\.){1,90})"'),
-    re.compile(r'(heading:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])children:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])label:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])title:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])placeholder:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])description:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])message:)"((?:[^"\\]|\\.){1,90})"'),
+    re.compile(r'((?<![\w$])heading:)"((?:[^"\\]|\\.){1,90})"'),
 ]
 
 changed_files = 0

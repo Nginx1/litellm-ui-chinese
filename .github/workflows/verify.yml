@@ -10,41 +10,47 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: 启动 LiteLLM 容器
+      - name: 启动 LiteLLM 容器（保持运行，无需 Proxy 服务）
         run: |
-          docker run -d --name litellm-test -p 4000:4000 \
-            -e LITELLM_MASTER_KEY=sk-test123 \
-            ghcr.io/berriai/litellm:main-latest \
-            --config /dev/null || true
-          # 若镜像 tag 变化导致启动失败，可固定版本 tag
+          # 只需要镜像里的静态资源文件，覆盖 entrypoint 让容器保持运行即可，
+          # 不启动 Proxy（避免最小 config 问题，也更快更稳）
+          docker run -d --name litellm-test             --entrypoint sleep             ghcr.io/berriai/litellm:main-latest 3600
 
-      - name: 等待就绪
+      - name: 等待容器就绪
         run: |
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4000/health/liveliness || echo 000)
-            [ "$code" = "200" ] && echo "ready" && exit 0
+            docker exec litellm-test true 2>/dev/null && echo "container ready" && exit 0
             sleep 5
           done
-          echo "litellm 未就绪，继续尝试打补丁"
+          echo "容器未就绪"; docker logs litellm-test 2>&1 | tail -20; exit 1
 
-      - name: 推送并执行全部补丁
+      - name: 记录补丁前资源哈希
+        run: |
+          docker exec litellm-test sh -c \
+            'cd /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out &&
+             find . -name "*.js" -o -name "*.html" | grep -v ".en.bak" | sort | xargs sha256sum' \
+            > /tmp/before.sha256
+          wc -l /tmp/before.sha256
+
+      - name: 顺序执行全部补丁（第一遍）
         run: |
           for f in $(ls | grep '^litellm_zh_patch.*\.py$' | sort -V); do
             docker cp "$f" litellm-test:/tmp/
-            docker exec litellm-test python3 "/tmp/$f"
+            docker exec litellm-test python3 "/tmp/$f" || { echo "补丁 $f 失败"; exit 1; }
           done
 
-      - name: 验证汉化词条存在
+      - name: 验证汉化词条（v1 与 v7 各至少一个）
         run: |
-          # 容器内静态资源应包含中文词条
-          found=$(docker exec litellm-test sh -c \
-            'grep -rl "虚拟密钥" /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out 2>/dev/null | wc -l')
-          echo "包含『虚拟密钥』的文件数: $found"
-          [ "$found" -gt 0 ] || { echo "未找到汉化词条"; exit 1; }
+          for word in "虚拟密钥" "基本信息"; do
+            found=$(docker exec litellm-test sh -c \
+              "grep -rl \"$word\" /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out 2>/dev/null | grep -v '.en.bak' | wc -l")
+            echo "词条『$word』命中文件数: $found"
+            [ "$found" -gt 0 ] || { echo "未找到词条 $word"; exit 1; }
+          done
 
       - name: 验证备份文件存在（可回滚）
         run: |
@@ -52,7 +58,18 @@ jobs:
           echo ".en.bak 备份数: $baks"
           [ "$baks" -gt 0 ] || { echo "未生成备份"; exit 1; }
 
-      - name: 幂等性验证（重跑不重复替换）
+      - name: 幂等性验证（第二遍全部补丁应零替换且哈希不变）
         run: |
-          out1=$(docker exec litellm-test python3 /tmp/litellm_zh_patch.py | head -1)
-          echo "重跑输出: $out1"
+          set -e
+          # 第二遍：每个补丁都应报告 0 处替换
+          for f in $(ls | grep '^litellm_zh_patch.*\.py$' | sort -V); do
+            out=$(docker exec litellm-test python3 "/tmp/$f" | head -1)
+            echo "$f => $out"
+            echo "$out" | grep -q "0 处替换" || { echo "补丁 $f 第二遍仍有替换，非幂等"; exit 1; }
+          done
+          # 资源哈希应与第一遍后一致
+          docker exec litellm-test sh -c \
+            'cd /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out &&
+             find . -name "*.js" -o -name "*.html" | grep -v ".en.bak" | sort | xargs sha256sum' \
+            > /tmp/after.sha256
+          diff /tmp/before.sha256 /tmp/after.sha256 && echo "哈希一致" || { echo "第二遍后哈希变化"; exit 1; }

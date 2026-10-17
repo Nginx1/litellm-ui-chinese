@@ -28,20 +28,20 @@ jobs:
           done
           echo "容器未就绪"; docker logs litellm-test 2>&1 | tail -20; exit 1
 
-      - name: 记录补丁前资源哈希
-        run: |
-          docker exec litellm-test sh -c \
-            'cd /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out &&
-             find . -name "*.js" -o -name "*.html" | grep -v ".en.bak" | sort | xargs sha256sum' \
-            > /tmp/before.sha256
-          wc -l /tmp/before.sha256
-
       - name: 顺序执行全部补丁（第一遍）
         run: |
           for f in $(ls | grep '^litellm_zh_patch.*\.py$' | sort -V); do
             docker cp "$f" litellm-test:/tmp/
             docker exec litellm-test python3 "/tmp/$f" || { echo "补丁 $f 失败"; exit 1; }
           done
+
+      - name: 记录第一遍补丁后的资源哈希
+        run: |
+          docker exec litellm-test sh -c \
+            'cd /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out &&
+             find . -name "*.js" -o -name "*.html" | grep -v ".en.bak" | sort | xargs sha256sum' \
+            > /tmp/before.sha256
+          wc -l /tmp/before.sha256
 
       - name: 验证汉化词条（v1 与 v7 各至少一个）
         run: |

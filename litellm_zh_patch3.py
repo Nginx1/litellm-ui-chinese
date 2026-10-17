@@ -2,7 +2,24 @@
 """LiteLLM UI 汉化 v3 —— 补最后漏网导航词 + 二级页面高频短语"""
 import os, re, shutil
 
-UI = "/app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out"
+# 动态发现 LiteLLM UI 目录（兼容不同 Python 版本的镜像）
+def _find_ui_dir():
+    import os as _os, glob as _glob
+    # 1) 通过已安装的 litellm 包定位
+    try:
+        import litellm
+        p = _os.path.join(_os.path.dirname(_os.path.abspath(litellm.__file__ or ".")), "proxy", "_experimental", "out")
+        if _os.path.isdir(p):
+            return p
+    except Exception:
+        pass
+    # 2) 兜底：glob 匹配任意 python 版本路径
+    for p in _glob.glob("/app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out"):
+        if _os.path.isdir(p):
+            return p
+    # 3) 最后兜底：旧版硬编码路径
+    return "/app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out"
+UI = _find_ui_dir()
 
 DICT3 = {
     "Models + Endpoints": "模型与端点",

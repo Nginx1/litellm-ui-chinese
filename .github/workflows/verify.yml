@@ -45,7 +45,7 @@ jobs:
 
       - name: 验证汉化词条（v1 与 v7 各至少一个）
         run: |
-          for word in "虚拟密钥" "基本信息"; do
+          for word in "虚拟密钥" "基本信息" "未找到模型"; do
             found=$(docker exec litellm-test sh -c \
               "grep -rl \"$word\" /app/.venv/lib/python*/site-packages/litellm/proxy/_experimental/out 2>/dev/null | grep -v '.en.bak' | wc -l")
             echo "词条『$word』命中文件数: $found"

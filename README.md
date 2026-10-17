@@ -8,7 +8,7 @@
 
 ## 作用
 
-- 将 LiteLLM Dashboard 界面汉化为中文，累计 **~2800 处**文案替换
+- 将 LiteLLM Dashboard 界面汉化为中文，累计 **~6600 处**文案替换（v8 全量补丁后属性值英文残留仅 ~6%，主要为技术缩写/标识符）
 - 覆盖范围：
   - 侧边栏导航（虚拟密钥、内部用户、团队、模型与端点、智能体、用量、日志、护栏等）
   - 表格表头（创建时间、状态、消费、模型、提供商等）
@@ -56,7 +56,7 @@ bash relocalize.sh
 
 脚本做的事：
 1. 把补丁脚本推送到容器 `/tmp/`
-2. 依次 `docker cp` 进容器执行（v1 基础导航/表头 → v2 侧边栏补充 → v3 二级页面 → v4 深度页面 → v5 弹窗/密钥 → v6 凭据/日志 → v7 高频残留补齐）
+2. 依次 `docker cp` 进容器执行（v1 基础导航/表头 → v2 侧边栏补充 → v3 二级页面 → v4 深度页面 → v5 弹窗/密钥 → v6 凭据/日志 → v7 高频残留 → v8 全量汉化）
 3. 重启 litellm 容器使静态资源生效
 4. 健康检查 + 验证汉化标记
 
@@ -75,6 +75,7 @@ docker cp litellm_zh_patch4.py litellm:/tmp/
 docker cp litellm_zh_patch5.py litellm:/tmp/
 docker cp litellm_zh_patch6.py litellm:/tmp/
 docker cp litellm_zh_patch7.py litellm:/tmp/
+docker cp litellm_zh_patch8.py litellm:/tmp/
 
 # 2. 依次执行
 docker exec litellm python3 /tmp/litellm_zh_patch.py
@@ -84,6 +85,7 @@ docker exec litellm python3 /tmp/litellm_zh_patch4.py
 docker exec litellm python3 /tmp/litellm_zh_patch5.py
 docker exec litellm python3 /tmp/litellm_zh_patch6.py
 docker exec litellm python3 /tmp/litellm_zh_patch7.py
+docker exec litellm python3 /tmp/litellm_zh_patch8.py
 
 # 3. 重启
 docker restart litellm
@@ -124,6 +126,7 @@ docker restart litellm
 | `litellm_zh_patch5.py` | 确认弹窗、密钥管理、登录页 |
 | `litellm_zh_patch6.py` | 凭据、向量库、日志详情、Redis/缓存、请求详情 |
 | `litellm_zh_patch7.py` | 高频残留补齐：审核按钮、别名管理、向量库操作、空态提示、认证方式说明等 |
+| `litellm_zh_patch8.py` | **全量汉化**（3179 条）：对静态资源全量扫描提取的全部剩余英文文案，glm-5.3 批量翻译 + 规则过滤（排除代码/标识符/CSS类），实测单次替换 3424 处 |
 | `relocalize.sh` | 一键：前置检查 → 推送 → 执行 → 重启 → 端口自适应健康检查 |
 
 ## 适用版本与兼容性记录

@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![LiteLLM](https://img.shields.io/badge/LiteLLM-1.104.0-blue.svg)](https://github.com/BerriAI/litellm)
-[![汉化词条](https://img.shields.io/badge/词条-%E2%89%883000-green.svg)](#文件说明)
+[![汉化词条](https://img.shields.io/badge/词典词条-4107-green.svg)](#文件说明)
 
 给 **LiteLLM Dashboard（Proxy UI）** 打中文汉化补丁的一组脚本。官方 LiteLLM 的 Web 管理界面是纯英文 Next.js 应用，社区没有现成的中文语言包，本项目通过**直接替换容器内静态资源（JS/HTML）中的用户可见文案**实现汉化，无需修改 LiteLLM 源码、无需重新构建前端。
 
